@@ -11,7 +11,7 @@ setup(
     author='niceStudio, Inc',
     author_email='service@niceStudio.com.tw',
     license='BSD',
-    url='https://github.com/niceStudio',
+    url='https://github.com/niceStudio/nicestudio.buildout.uwsgi',
     package_dir={'': 'src'},
     packages=find_packages('src'),
     namespace_packages=['nicestudio', 'buildout'],
