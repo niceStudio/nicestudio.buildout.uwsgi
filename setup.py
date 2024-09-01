@@ -4,7 +4,7 @@
 
 kwargs = {
     'name': 'nicestudio.buildout.uwsgi',
-    'version': '1.0.dev1',
+    'version': '1.0.dev2',
     'description': 'Buildout recipe downloading, compiling and configuring uWSGI.',
     'long_description': open('README.md', 'r').read(),
     'author': 'niceStudio, Inc',
