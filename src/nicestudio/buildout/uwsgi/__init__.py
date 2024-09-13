@@ -9,12 +9,15 @@ import tempfile
 import setuptools
 import zc
 import zc.recipe.egg
+from zc.buildout import UserError
 from zc.buildout.download import Download
+
+__version__ = '1.0dev3'
 
 DOWNLOAD_URL = 'http://projects.unbit.it/downloads/uwsgi-latest.tar.gz'
 EXCLUDE_OPTIONS = {
     'bin-directory', 'develop-eggs-directory', 'eggs', 'eggs-directory', 'executable', 'extra-paths',
-    'download-url', 'find-links', 'python', 'recipe', 'pth-files'}
+    'download-url', 'find-links', 'python', 'recipe', 'pth-files', 'force-install-executable'}
 
 _oprp = getattr(os.path, 'realpath', lambda path: path)
 
@@ -40,7 +43,7 @@ class UWSGI:
 
         # Collect configuration params from options.
         self.conf = {}
-        self.install_path = options.get(
+        self.executable_path = options.get(
             'executable', os.path.join(buildout['buildout']['bin-directory'], name)
         )
         self.download_url = options.get('download-url', DOWNLOAD_URL)
@@ -162,8 +165,16 @@ class UWSGI:
         return xml_path
 
     def install(self):
-        paths = [self.install_path]
-        if not os.path.isfile(self.install_path):
+        paths = []
+        require_install = self.options.get('force-install-executable', False)
+        if not require_install:
+            if not os.path.exists(self.executable_path):
+                # if executable_path is not existed, set `require_install` to `True`
+                require_install = True
+            elif not os.path.isfile(self.executable_path):
+                raise UserError("'%s' existed, but it is not file" % self.executable_path)
+
+        if require_install:
             # Download uWSGI.
             download_path = self.download_release()
 
