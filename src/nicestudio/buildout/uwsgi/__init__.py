@@ -12,7 +12,6 @@ import zc.recipe.egg
 from zc.buildout import UserError
 from zc.buildout.download import Download
 
-__version__ = '1.0dev3'
 
 DOWNLOAD_URL = 'http://projects.unbit.it/downloads/uwsgi-latest.tar.gz'
 EXCLUDE_OPTIONS = {

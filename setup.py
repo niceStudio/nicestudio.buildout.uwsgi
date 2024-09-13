@@ -1,20 +1,10 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2024  niceStudio, Inc. All rights reserved.
 # See also LICENSE.txt
-import os
-import sys
-
-source_dirname = 'src'
-
-project_dir = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(project_dir, source_dirname))
-
-import nicestudio.buildout.uwsgi
 
 kwargs = {
     'name': 'nicestudio.buildout.uwsgi',
-    # 'version': '1.0.dev3',
-    'version': getattr(nicestudio.buildout.uwsgi, '__version__'),
+    'version': '1.0.dev3',
     'description': 'Buildout recipe downloading, compiling and configuring uWSGI.',
     'long_description': open('README.md').read(),
     'author': 'niceStudio, Inc',
