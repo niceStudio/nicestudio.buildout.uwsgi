@@ -4,7 +4,7 @@
 
 kwargs = {
     'name': 'nicestudio.buildout.uwsgi',
-    'version': '1.0.dev3',
+    'version': '1.0.dev4',
     'description': 'Buildout recipe downloading, compiling and configuring uWSGI.',
     'long_description': open('README.md').read(),
     'author': 'niceStudio, Inc',
@@ -28,6 +28,7 @@ kwargs = {
         'zc.recipe.egg',
     ],
     'entry_points': {'zc.buildout': ['default = nicestudio.buildout.uwsgi:UWSGI']},
+    'extras_require': dict(test=['zc.buildout >=2.9']),
 }
 
 try:
