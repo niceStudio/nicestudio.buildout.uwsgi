@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 
 import setuptools
 import zc
@@ -12,11 +13,11 @@ import zc.recipe.egg
 from zc.buildout import UserError
 from zc.buildout.download import Download
 
-__version__ = '1.0dev3'
+# from xml.etree.ElementTree import indent
 
 DOWNLOAD_URL = 'http://projects.unbit.it/downloads/uwsgi-latest.tar.gz'
 EXCLUDE_OPTIONS = {
-    'bin-directory', 'develop-eggs-directory', 'eggs', 'eggs-directory', 'executable', 'extra-paths',
+    'bin-directory', 'develop-eggs-directory', 'eggs', 'eggs-directory', 'executable', 'extra-paths', 'output',
     'download-url', 'find-links', 'python', 'recipe', 'pth-files', 'force-install-executable'}
 
 _oprp = getattr(os.path, 'realpath', lambda path: path)
@@ -27,8 +28,25 @@ def realpath(path):
 
 
 class UWSGI:
-    """Buildout recipe downloading, compiling and configuring python
-    paths for uWSGI.
+    f"""
+    Buildout recipe downloading, compiling if not exists, and configuring python paths for uWSGI.
+
+    Usage::
+    
+        [uwsgi]
+        recipe = nicestudio.buildout.uwsgi
+        output = <OUTPUT_FILE_PATH>
+        executable = <UWSGI_FILE_PATH>
+        download-url = <DOWNLOAD_URL>
+        force-install-executable = <FORCE_INSTALL_EXECUTABLE>
+        <UWSGI_OPTION_NAME> = <UWSGI_OPTION_VALUE>
+    
+    OUTPUT_FILE_PATH: the output file path.
+    UWSGI_FILE_PATH: the uWSGI file path.
+    DOWNLOAD_URL: the download URL. default={DOWNLOAD_URL}
+    FORCE_INSTALL_EXECUTABLE: force installation of uWSGI executable. default=false
+    UWSGI_OPTION_NAME: the uWSGI option name. Ref: https://uwsgi-docs.readthedocs.io/en/latest/Options.html
+    UWSGI_OPTION_VALUE: the uWSGI option value. Ref: https://uwsgi-docs.readthedocs.io/en/latest/Options.html
     """
 
     def __init__(self, buildout, name, options):
@@ -41,21 +59,23 @@ class UWSGI:
         else:
             options.setdefault('extra-paths', options.get('pythonpath', ''))
 
+        self.output = options.get('output')
+        if not self.output:
+            self.output = os.path.join(
+                self.buildout['buildout']['parts-directory'],
+                self.name,
+                'uwsgi.xml')
+
         # Collect configuration params from options.
-        self.conf = {}
-        self.executable_path = options.get(
-            'executable', os.path.join(buildout['buildout']['bin-directory'], name)
+        self.executable = options.get(
+            'executable',
+            os.path.join(buildout['buildout']['bin-directory'], name)
         )
         self.download_url = options.get('download-url', DOWNLOAD_URL)
-        for key in options:
-            # XXX: Excludes buildout fluff. This code sucks, there
-            # must be a better way.
-            if key in EXCLUDE_OPTIONS:
-                continue
-            elif key.startswith('_'):
-                continue
-            self.conf[key] = options.get(key, None)
 
+        self.conf = dict(
+            [(k, v) for k, v in options.items() if not k.startswith('_') and k not in EXCLUDE_OPTIONS]
+        )
         self.options = options
 
     def download_release(self):
@@ -106,7 +126,7 @@ class UWSGI:
             if sys_path_changed:
                 sys.path.remove(uwsgi_path)
 
-        shutil.copy(os.path.join(uwsgi_path, self.name), self.install_path)
+        shutil.copy(os.path.join(uwsgi_path, self.name), self.executable)
 
     def get_extra_paths(self):
         """Returns extra paths to include for uWSGI.
@@ -128,51 +148,35 @@ class UWSGI:
         return [p.replace('/', os.path.sep) for p in
                 self.options['extra-paths'].splitlines() if p.strip()]
 
-    def create_conf_xml(self):
-        """Create xml file file with which to run uwsgi.
-        """
-        path = os.path.join(
-            self.buildout['buildout']['parts-directory'],
-            self.name)
-        if not os.path.isdir(path):
-            os.makedirs(path)
+    def create_xml_content(self, egg_paths):
+        root = ET.Element('uwsgi')
 
-        xml_path = os.path.join(path, 'uwsgi.xml')
-
-        conf = ""
         for key, value in self.conf.items():
-            if value.lower() in ('true', 'on', 'yes'):
-                conf += "<%s/>\n" % key
-            elif value and value.lower() not in ('false', 'off', 'yes'):
-                for v in value.split("\n"):
-                    conf += "<%s>%s</%s>\n" % (key, v, key)
+            value = (value or "").lower()
 
-        requirements, ws = self.egg.working_set()
-        eggs_paths = [dist.location for dist in ws]
-        eggs_paths.extend(self.get_extra_paths())
-        # order preserving unique
-        unique_egg_paths = []
-        for p in eggs_paths:
-            if p not in unique_egg_paths:
-                unique_egg_paths.append(p)
+            if value in ("true", "on", "yes"):
+                ET.SubElement(root, key)
+            else:
+                if value not in ("false", "off", "no"):
+                    for item in value.split("\n"):
+                        ET.SubElement(root, key).text = item
+                else:
+                    ET.SubElement(root, key).text = value
 
-        for path in map(realpath, unique_egg_paths):
-            conf += "<pythonpath>%s</pythonpath>\n" % path
+        for egg_path in egg_paths:
+            ET.SubElement(root, "pythonpath").text = egg_path
 
-        f = open(xml_path, 'w')
-        f.write("<uwsgi>\n%s</uwsgi>" % conf)
-        f.close()
-        return xml_path
+        ET.indent(root, space='    ')
+        return ET.tostring(root, encoding='UTF-8').decode('UTF-8')
 
     def install(self):
-        paths = []
         require_install = self.options.get('force-install-executable', False)
         if not require_install:
-            if not os.path.exists(self.executable_path):
-                # if executable_path is not existed, set `require_install` to `True`
+            if not os.path.exists(self.executable):
+                # if executable is not existed, set `require_install` to `True`
                 require_install = True
-            elif not os.path.isfile(self.executable_path):
-                raise UserError("'%s' existed, but it is not file" % self.executable_path)
+            elif not os.path.isfile(self.executable):
+                raise UserError("'%s' existed, but it is not file" % self.executable)
 
         if require_install:
             # Download uWSGI.
@@ -188,8 +192,23 @@ class UWSGI:
                 # Remove extracted uWSGI package.
                 shutil.rmtree(extract_path)
 
-        # Create uWSGI conf xml.
-        paths.append(self.create_conf_xml())
-        return paths
+        requirements, ws = self.egg.working_set()
+        eggs_paths = [dist.location for dist in ws]
+        eggs_paths.extend(self.get_extra_paths())
+        # order preserving unique
+        unique_egg_paths = []
+        for p in eggs_paths:
+            if p not in unique_egg_paths:
+                unique_egg_paths.append(p)
+        egg_paths = map(realpath, unique_egg_paths)
+
+        output_dir = os.path.dirname(self.output)
+        if output_dir and not os.path.isdir(output_dir):
+            os.makedirs(output_dir)
+
+        content = self.create_xml_content(egg_paths)
+        with open(self.output, 'w') as fp:
+            fp.write(content)
+        return [self.output]
 
     update = install
